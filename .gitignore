@@ -47,6 +47,7 @@ yarn-error.log*
 build/
 *.tar.gz
 *.zip
+*.pdf
 
 # ── Installers ──
 *.exe
