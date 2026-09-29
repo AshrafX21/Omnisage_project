@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Heart,
   User,
+  LogOut,
 } from 'lucide-react';
 
 /** Navigation tab definitions */
@@ -37,9 +38,11 @@ const NAV_ITEMS = [
  * @param {Object}   props
  * @param {string}   props.activeTab   - The currently active tab id.
  * @param {Function} props.onTabChange - Callback invoked with the new tab id.
+ * @param {Object}   [props.user]      - The signed-in user's profile (id, email, full_name).
+ * @param {Function} [props.onLogout]  - Callback invoked when the sign-out button is clicked.
  * @returns {JSX.Element}
  */
-export default function Sidebar({ activeTab, onTabChange }) {
+export default function Sidebar({ activeTab, onTabChange, user, onLogout }) {
   return (
     <aside className="sidebar">
       {/* ── Logo ─────────────────────────────────── */}
@@ -82,12 +85,22 @@ export default function Sidebar({ activeTab, onTabChange }) {
           <User className="h-4 w-4" />
         </div>
         <div className="user-info">
-          <p className="user-name">Alex Mercer</p>
+          <p className="user-name">{user?.full_name || user?.email || 'Account'}</p>
           <p className="user-status">
             <span className="status-dot" />
             Active Account
           </p>
         </div>
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="sidebar-logout-btn"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </aside>
   );

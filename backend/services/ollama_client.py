@@ -7,6 +7,8 @@ as their LLM backend.
 """
 
 import json
+from typing import Optional
+
 import requests
 from backend.config import settings
 
@@ -26,6 +28,76 @@ class OllamaClient:
         self.base_url = settings.OLLAMA_BASE_URL
         self.model = settings.OLLAMA_MODEL
         self.embed_model = settings.OLLAMA_EMBED_MODEL
+        self._resolved = False  # becomes True once self.model/self.embed_model
+                                 # have been checked against what's actually installed
+
+    def _resolve_models(self) -> None:
+        """
+        Makes sure `self.model` / `self.embed_model` refer to models that are
+        actually pulled on this Ollama server, falling back to whatever IS
+        installed instead of blindly sending requests for a configured model
+        name that doesn't exist (which Ollama answers with a 404, not a
+        helpful error).
+
+        Cached on the instance once it actually succeeds, and is a no-op on
+        later calls once the configured models are confirmed present. If
+        Ollama isn't reachable yet (e.g. it's still starting up — Omnisage's
+        launcher only waits ~2 seconds before moving on), this does NOT cache
+        a permanent "gave up" state: it retries on the next call instead.
+        Without this, the very first AI request made while Ollama was merely
+        still booting would set `self.model`/`self.embed_model` in stone at
+        their original (possibly-not-installed) configured values for the
+        rest of the process's lifetime — so every AI feature would keep
+        404ing even minutes later once Ollama was fully up and running.
+        """
+        if self._resolved:
+            return
+
+        available = self.list_models()
+        if not available:
+            return  # Ollama unreachable / still starting / nothing installed
+                     # yet — leave _resolved False so the next call retries
+                     # instead of a real connection error being fatal for
+                     # every subsequent request this process ever makes.
+
+        self._resolved = True  # only cache once we actually have a model list
+
+        def find_match(preferred: str) -> Optional[str]:
+            if preferred in available:
+                return preferred
+            # Ollama model names are "name:tag" — match on the base name too,
+            # so e.g. a configured "phi3:mini" still matches an installed
+            # "phi3:latest".
+            base = preferred.split(":")[0]
+            for m in available:
+                if m.split(":")[0] == base:
+                    return m
+            return None
+
+        resolved_model = find_match(self.model)
+        if resolved_model is None:
+            resolved_model = available[0]
+            print(
+                f"WARNING: Configured Ollama model '{self.model}' is not installed. "
+                f"Using '{resolved_model}' instead. Run 'ollama pull {self.model}' "
+                f"to use the originally configured model."
+            )
+        self.model = resolved_model
+
+        resolved_embed = find_match(self.embed_model)
+        if resolved_embed is None:
+            # No dedicated embedding model installed — fall back to whatever
+            # chat model is available. Ollama's /api/embed works with regular
+            # generative models too (lower quality embeddings, but functional
+            # rather than completely broken).
+            resolved_embed = available[0]
+            print(
+                f"WARNING: Configured embedding model '{self.embed_model}' is not "
+                f"installed. Using '{resolved_embed}' instead (results will be "
+                f"lower quality). Run 'ollama pull {self.embed_model}' for the "
+                f"originally configured embedding model."
+            )
+        self.embed_model = resolved_embed
 
     def is_available(self) -> bool:
         """
@@ -69,6 +141,7 @@ class OllamaClient:
         Raises:
             RuntimeError: If the Ollama server returns an error or is unreachable.
         """
+        self._resolve_models()
         payload = {
             "model": self.model,
             "prompt": prompt,
@@ -112,6 +185,7 @@ class OllamaClient:
         Raises:
             RuntimeError: If embedding generation fails.
         """
+        self._resolve_models()
         payload = {
             "model": self.embed_model,
             "input": text,

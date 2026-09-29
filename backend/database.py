@@ -26,14 +26,19 @@ try:
     # Test connection liveness
     with engine.connect() as conn:
         pass
-    _using_postgres = True
-    print("Successfully connected to PostgreSQL database.")
+    # Determine the ACTUAL backend from the resolved URL rather than assuming
+    # "connection succeeded" means Postgres — settings.DATABASE_URL can be a
+    # sqlite:// URL too (e.g. via an explicit env var override), in which
+    # case this branch still runs (the connection succeeds), and the log/
+    # is_postgres() flag would otherwise be wrong.
+    _using_postgres = engine.url.get_backend_name() == "postgresql"
+    print(f"Successfully connected to the database ({engine.url.get_backend_name()}).")
 except (OperationalError, Exception) as e:
     print(f"WARNING: Database connection failed (DATABASE_URL={settings.DATABASE_URL}). Details: {e}", file=sys.stderr)
     print("Falling back to local SQLite database: sqlite:///./omnisage.db", file=sys.stderr)
     engine = create_engine(
         "sqlite:///./omnisage.db",
-        connect_args={"check_same_thread": False}  # Required for SQLite multi-threading
+        connect_args={"check_same_thread": False, "timeout": 30}  # Required for SQLite multi-threading; 30s busy timeout so concurrent writers wait instead of raising "database is locked"
     )
 
 # Attempt to initialize pgvector extension (optional — AI features use Python-side cosine similarity)

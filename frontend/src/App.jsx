@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Lock } from 'lucide-react';
 
 import Sidebar          from './components/Sidebar';
+import AuthPage         from './pages/AuthPage';
 import DashboardPage    from './pages/DashboardPage';
 import RecordsPage      from './pages/RecordsPage';
 import AnalyticsPage    from './pages/AnalyticsPage';
@@ -39,6 +40,11 @@ export default function App() {
   const [activeTab,      setActiveTab]      = useState('dashboard');
   const [selectedRecord, setSelectedRecord] = useState(null);
 
+  /* ── Auth state ─────────────────────────────────── */
+  const [currentUser,   setCurrentUser]   = useState(null);
+  const [authChecking,  setAuthChecking]  = useState(true);
+  const [greeting,      setGreeting]      = useState(null); // transient "Welcome, X" banner
+
   /* ── Guest share-link state ────────────────────── */
   const [shareToken,       setShareToken]       = useState(null);
   const [sharedRecords,    setSharedRecords]    = useState([]);
@@ -46,16 +52,68 @@ export default function App() {
   const [passcodeRequired, setPasscodeRequired] = useState(false);
   const [shareError,       setShareError]       = useState(null);
 
-  /* ── Mount: detect /share/:uuid route ──────────── */
+  /* ── Mount: detect /share/:uuid route, else resume/require a session ─── */
   useEffect(() => {
     const match = window.location.pathname.match(/^\/share\/([a-f0-9-]+)/i);
     if (match) {
       setShareToken(match[1]);
+      setAuthChecking(false);
       loadSharedPortal(match[1]);
-    } else {
-      loadDashboard();
+      return;
     }
+    resumeSession();
   }, []);
+
+  /* ── Auth handling ──────────────────────────────── */
+
+  /**
+   * On load, tries to restore a session from a previously stored token.
+   * Falls back to showing the login/sign-up page if none exists or it's expired.
+   */
+  const resumeSession = async () => {
+    if (!apiService.hasStoredToken()) {
+      setAuthChecking(false);
+      return;
+    }
+    try {
+      const user = await apiService.getCurrentUser();
+      setCurrentUser(user);
+      loadDashboard();
+    } catch (err) {
+      console.warn('Stored session is no longer valid; showing login.');
+    } finally {
+      setAuthChecking(false);
+    }
+  };
+
+  /**
+   * Called by AuthPage once login or account creation succeeds.
+   * Greets the user by name and loads their records.
+   *
+   * @param {Object} user - The authenticated user's profile.
+   */
+  const handleAuthSuccess = (user) => {
+    setCurrentUser(user);
+    const firstName = (user.full_name || user.email || '').trim().split(' ')[0];
+    setGreeting(`Welcome${firstName ? `, ${firstName}` : ''}!`);
+    setTimeout(() => setGreeting(null), 4000);
+    loadDashboard();
+  };
+
+  /**
+   * Signs the current user out, clears local state, and returns to the login page.
+   */
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+    } catch (err) {
+      console.warn('Logout request failed (token cleared locally regardless):', err);
+    }
+    setCurrentUser(null);
+    setRecords([]);
+    setSelectedRecord(null);
+    setActiveTab('dashboard');
+  };
 
   /* ── Data fetching ─────────────────────────────── */
 
@@ -133,6 +191,7 @@ export default function App() {
             loading={loading}
             onRecordSelect={setSelectedRecord}
             onTabChange={setActiveTab}
+            user={currentUser}
           />
         );
       case 'records':
@@ -271,16 +330,41 @@ export default function App() {
     );
   }
 
+  /* ── Resolving a stored session ────────────────── */
+  if (authChecking) {
+    return (
+      <div className="page-loading" style={{ minHeight: '100vh' }}>
+        <div className="spinner" />
+        <p>Loading Omnisage…</p>
+      </div>
+    );
+  }
+
+  /* ── Not logged in: login / create-account page ──── */
+  if (!currentUser) {
+    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
+  }
+
   /* ── Main patient portal shell ─────────────────── */
   return (
     <div className="app-shell">
       {/* Fixed Left Sidebar */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        user={currentUser}
+        onLogout={handleLogout}
+      />
 
       {/* Scrollable Main Content */}
       <main className="app-main">
         {renderPage()}
       </main>
+
+      {/* Transient post-login greeting */}
+      {greeting && (
+        <div className="toast-greeting">{greeting}</div>
+      )}
 
       {/* Global detail modal (triggered from any tab) */}
       {selectedRecord && (

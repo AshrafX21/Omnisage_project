@@ -6,13 +6,19 @@
 node_modules/
 dist/
 .node/
+.vite/
 *.tgz
+
+# ── Trash / Temp ──
+_to_delete/
 
 # ── Python / Backend ──
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+venv/
+.venv/
 backend/venv/
 backend/uploads/
 *.egg-info/

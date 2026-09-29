@@ -140,34 +140,45 @@ export default function FileUploadZone({ onUploadSuccess }) {
             Upload Activity
           </h4>
           {uploads.map((upload) => (
-            <div key={upload.tempId} className="flex items-center justify-between bg-slate-800/20 border border-white/5 rounded-lg p-2.5 text-sm">
-              <div className="flex items-center space-x-3 truncate">
-                <FileText className="h-5 w-5 text-slate-400 shrink-0" />
-                <span className="text-slate-200 truncate font-medium max-w-[200px] md:max-w-xs">
-                  {upload.name}
-                </span>
+            <div key={upload.tempId} className="bg-slate-800/20 border border-white/5 rounded-lg p-2.5 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 truncate">
+                  <FileText className="h-5 w-5 text-slate-400 shrink-0" />
+                  <span className="text-slate-200 truncate font-medium max-w-[200px] md:max-w-xs">
+                    {upload.name}
+                  </span>
+                </div>
+
+                <div className="flex items-center space-x-2 shrink-0">
+                  {upload.status === 'uploading' && (
+                    <span className="flex items-center text-xs text-primary-500 font-medium">
+                      <Loader className="animate-spin h-3.5 w-3.5 mr-1" />
+                      Parsing...
+                    </span>
+                  )}
+                  {upload.status === 'success' && (
+                    <span className="flex items-center text-xs text-emerald-500 font-medium">
+                      <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                      Indexed
+                    </span>
+                  )}
+                  {upload.status === 'failed' && (
+                    <span className="flex items-center text-xs text-rose-500 font-medium">
+                      <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                      Failed
+                    </span>
+                  )}
+                </div>
               </div>
-              
-              <div className="flex items-center space-x-2 shrink-0">
-                {upload.status === 'uploading' && (
-                  <span className="flex items-center text-xs text-primary-500 font-medium">
-                    <Loader className="animate-spin h-3.5 w-3.5 mr-1" />
-                    Parsing...
-                  </span>
-                )}
-                {upload.status === 'success' && (
-                  <span className="flex items-center text-xs text-emerald-500 font-medium">
-                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                    Indexed
-                  </span>
-                )}
-                {upload.status === 'failed' && (
-                  <span className="flex items-center text-xs text-rose-500 font-medium max-w-[150px] truncate" title={upload.error}>
-                    <AlertCircle className="h-3.5 w-3.5 mr-1" />
-                    {upload.error}
-                  </span>
-                )}
-              </div>
+
+              {/* Full error text, wrapped (not truncated) — a truncated
+                  "Failed to record data in da..." with no visible way to
+                  read the rest makes real failures undiagnosable. */}
+              {upload.status === 'failed' && upload.error && (
+                <p className="mt-1.5 pl-8 text-xs text-rose-400/80 break-words">
+                  {upload.error}
+                </p>
+              )}
             </div>
           ))}
         </div>

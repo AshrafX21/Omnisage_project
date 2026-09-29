@@ -83,8 +83,20 @@ class ChatService:
         """
         top_k = top_k or settings.RAG_TOP_K
 
-        # Embed the query
-        query_embedding = ollama_client.embed(query)
+        # Embed the query. This is allowed to fail (e.g. Ollama unreachable)
+        # without taking down the whole chat request — send_message() below
+        # already has its own try/except around the final generate() call
+        # that turns an Ollama failure into a normal, specific in-conversation
+        # reply ("I'm sorry, I encountered an error processing your request:
+        # <real reason>"). Previously this embed() call was NOT wrapped, so
+        # if Ollama was down, this raised straight out of send_message(), past
+        # that graceful-degradation handling, as a hard 503 with no message/
+        # citations ever stored — which is what the frontend's generic
+        # "Please make sure Ollama is running" fallback was actually masking.
+        try:
+            query_embedding = ollama_client.embed(query)
+        except Exception:
+            return []
 
         # Get all embeddings for this user's records
         embeddings = (

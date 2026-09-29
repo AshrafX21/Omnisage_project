@@ -7,8 +7,17 @@
 
 import axios from 'axios';
 
-// Base backend URL config (port 8000 for FastAPI)
-const BASE_URL = 'http://localhost:8000/api';
+// Base backend URL config.
+//
+// Always relative so this works no matter how the app is being served:
+//  - Vite dev server (start.bat, port 5173) proxies /api to the backend on
+//    :8000 (see vite.config.js), avoiding CORS entirely.
+//  - Production single-website mode (Omnisage.bat, port 80) serves the built
+//    frontend and the API from the same origin, so /api resolves directly.
+const BASE_URL = '/api';
+
+// localStorage key holding the current session's Bearer token
+const TOKEN_KEY = 'omnisage_token';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -17,7 +26,81 @@ const api = axios.create({
   },
 });
 
+// Attach the stored session token (if any) to every outgoing request.
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const apiService = {
+  /* ── Auth ───────────────────────────────────────── */
+
+  /**
+   * Logs in with email/password and persists the returned session token.
+   *
+   * @param {string} email - Account email address.
+   * @param {string} password - Account password.
+   * @returns {Promise<Object>} { token, user } — user includes id, email, full_name.
+   */
+  login: async (email, password) => {
+    const response = await api.post('/auth/login', { email, password });
+    localStorage.setItem(TOKEN_KEY, response.data.token);
+    return response.data;
+  },
+
+  /**
+   * Creates a new account and persists the returned session token.
+   *
+   * @param {string} fullName - The new user's display name.
+   * @param {string} email - Account email address.
+   * @param {string} password - Account password (min 6 characters).
+   * @returns {Promise<Object>} { token, user } — user includes id, email, full_name.
+   */
+  register: async (fullName, email, password) => {
+    const response = await api.post('/auth/register', {
+      full_name: fullName,
+      email,
+      password,
+    });
+    localStorage.setItem(TOKEN_KEY, response.data.token);
+    return response.data;
+  },
+
+  /**
+   * Invalidates the current session token on the server and clears it locally.
+   *
+   * @returns {Promise<void>}
+   */
+  logout: async () => {
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  },
+
+  /**
+   * Validates the stored session token and returns the profile of its owner.
+   * Used on app load to restore a session without re-prompting for credentials.
+   *
+   * @returns {Promise<Object>} The authenticated user's profile.
+   */
+  getCurrentUser: async () => {
+    const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  /**
+   * Whether a session token is currently stored (does not verify it's valid).
+   *
+   * @returns {boolean}
+   */
+  hasStoredToken: () => Boolean(localStorage.getItem(TOKEN_KEY)),
+
+
   /**
    * Uploads a file (PDF, DICOM, image) as multipart form data.
    * 

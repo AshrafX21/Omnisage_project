@@ -52,9 +52,11 @@ const CATEGORY_ICON = {
  * @param {boolean}  props.loading       - Whether records are still fetching.
  * @param {Function} props.onRecordSelect - Opens the detail modal for a record.
  * @param {Function} props.onTabChange   - Navigates to another sidebar tab.
+ * @param {Object}   [props.user]        - The signed-in user's profile (id, email, full_name).
  * @returns {JSX.Element}
  */
-export default function DashboardPage({ records, loading, onRecordSelect, onTabChange }) {
+export default function DashboardPage({ records, loading, onRecordSelect, onTabChange, user }) {
+  const firstName = (user?.full_name || user?.email || '').trim().split(' ')[0] || 'there';
   /* ── Recommendations state ─────────────────────── */
   const [recommendations, setRecommendations] = useState([]);
   const [recsLoading, setRecsLoading] = useState(false);
@@ -158,7 +160,7 @@ export default function DashboardPage({ records, loading, onRecordSelect, onTabC
           </div>
           <h1 className="hero-title">
             Good {getTimeGreeting()},&nbsp;
-            <span className="hero-name">Alex</span>
+            <span className="hero-name">{firstName}</span>
           </h1>
           <p className="hero-sub">
             Your complete health history is secured and indexed. Here's your at-a-glance summary.

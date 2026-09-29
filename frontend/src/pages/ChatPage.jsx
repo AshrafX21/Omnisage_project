@@ -120,10 +120,19 @@ export default function ChatPage() {
       // Refresh conversation list
       loadConversations();
     } catch (err) {
+      // Surface the backend's actual error detail (e.g. "Ollama server is
+      // not running.", or a specific model/DB error) instead of always
+      // showing the same generic message regardless of what really failed —
+      // a hardcoded "make sure Ollama is running" is actively misleading
+      // when the real cause is something else entirely, and makes real
+      // problems undiagnosable from the UI alone.
+      const detail = err.response?.data?.detail;
       const errorMsg = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please make sure Ollama is running and try again.',
+        content: detail
+          ? `Sorry, I encountered an error: ${detail}`
+          : 'Sorry, I encountered an error reaching the server. Please check your connection and try again.',
         citations: [],
         created_at: new Date().toISOString(),
       };

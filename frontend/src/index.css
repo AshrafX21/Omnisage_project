@@ -328,6 +328,57 @@
     animation: pulse 2s ease-in-out infinite;
     display: inline-block;
   }
+  .user-info { flex: 1; min-width: 0; overflow: hidden; }
+  .user-info .user-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sidebar-logout-btn {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #64748b;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .sidebar-logout-btn:hover {
+    background: rgba(251,113,133,0.10);
+    border-color: rgba(251,113,133,0.25);
+    color: #fb7185;
+  }
+
+  /* ── Transient post-login greeting toast ── */
+  .toast-greeting {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    padding: 12px 22px;
+    background: rgba(13,19,34,0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(52,211,153,0.25);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.40);
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    animation: toastIn 0.3s ease-out, toastOut 0.3s ease-in 3.7s forwards;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
   /* ──────────────────────────────────────────────────

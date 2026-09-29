@@ -1,11 +1,12 @@
 /**
  * VitalsChart Component.
- * 
- * Aggregates clinical lab vitals (glucose, cholesterol, vitamin D, blood pressure)
- * from a list of records and visualizes their historical trends using Recharts.
+ *
+ * Aggregates whatever clinical vitals/biometrics are actually present in a
+ * list of records (not a fixed hardcoded set) and visualizes their
+ * historical trends using Recharts.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -18,59 +19,88 @@ import {
 } from 'recharts';
 import { Activity, TrendingUp } from 'lucide-react';
 
+// Optional reference thresholds for metrics we recognize. Any metric not
+// listed here still charts fine — it just has no min/max lines drawn.
+const THRESHOLD_MAP = {
+  'Vitamin D': { min: 30, max: 100 },
+  'Total Cholesterol': { min: 0, max: 200 },
+  'LDL Cholesterol': { min: 0, max: 100 },
+  'HDL Cholesterol': { min: 40, max: 100 },
+  'Fasting Glucose': { min: 70, max: 100 },
+  'Hemoglobin': { min: 13.8, max: 17.2 },
+  'Systolic Blood Pressure': { min: 90, max: 120 },
+  'Diastolic Blood Pressure': { min: 60, max: 80 },
+};
+
 /**
- * Renders analytical charts for clinical vitals and biometrics.
- * 
+ * Renders analytical charts for whatever clinical vitals/biometrics are
+ * present in the given records.
+ *
  * @param {Object} props
- * @param {Array} props.records - List of parsed medical record objects from the database.
+ * @param {Array} props.records - List of parsed medical record objects to chart (already
+ *   filtered to whichever reports the user selected).
  * @returns {JSX.Element} The biometrics visual analytics panel.
  */
 export default function VitalsChart({ records }) {
-  const [selectedMetric, setSelectedMetric] = useState('Vitamin D');
+  // Every distinct metric name actually present across the given records —
+  // this is what makes the chart show "all the biometrics present in the
+  // selected reports" instead of a fixed 4-metric whitelist.
+  const availableMetrics = useMemo(() => {
+    const set = new Set();
+    records.forEach(record => {
+      (record.vitals || []).forEach(v => {
+        if (v.metric) set.add(v.metric);
+      });
+    });
+    return Array.from(set).sort();
+  }, [records]);
 
-  // Aggregates vitals data points across all medical records
-  const aggregateData = () => {
+  const [selectedMetric, setSelectedMetric] = useState(null);
+
+  // Keep the selection valid as the underlying record set changes (e.g. the
+  // user toggles which reports are included, or a new one is uploaded).
+  useEffect(() => {
+    if (availableMetrics.length === 0) {
+      setSelectedMetric(null);
+    } else if (!selectedMetric || !availableMetrics.includes(selectedMetric)) {
+      setSelectedMetric(availableMetrics[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableMetrics]);
+
+  // Aggregates vitals data points for the selected metric across the given records.
+  const chartData = useMemo(() => {
+    if (!selectedMetric) return [];
     const points = [];
 
     records.forEach(record => {
-      if (!record.vitals || !record.record_date) return;
-      
-      // Find the specific metric
-      const match = record.vitals.find(
+      const match = (record.vitals || []).find(
         v => v.metric.toLowerCase() === selectedMetric.toLowerCase()
       );
+      if (!match) return;
 
-      if (match) {
-        points.push({
-          date: record.record_date,
-          displayDate: new Date(record.record_date).toLocaleDateString(undefined, { 
-            month: 'short', 
-            year: 'numeric' 
-          }),
-          value: parseFloat(match.value),
-          unit: match.unit
-        });
-      }
+      // Prefer the document's own clinical date; fall back to the upload
+      // date so records the parser couldn't date still show up in the trend.
+      const dateValue = record.record_date || record.uploaded_at;
+      if (!dateValue) return;
+
+      points.push({
+        date: dateValue,
+        displayDate: new Date(dateValue).toLocaleDateString(undefined, {
+          month: 'short',
+          day: record.record_date ? undefined : 'numeric',
+          year: 'numeric'
+        }),
+        value: parseFloat(match.value),
+        unit: match.unit
+      });
     });
 
     // Sort data points chronologically
     return points.sort((a, b) => new Date(a.date) - new Date(b.date));
-  };
+  }, [records, selectedMetric]);
 
-  const chartData = aggregateData();
-
-  // Metrics definitions for threshold reference lines
-  const thresholdMap = {
-    'Vitamin D': { min: 30, max: 100, unit: 'ng/mL' },
-    'Total Cholesterol': { min: 0, max: 200, unit: 'mg/dL' },
-    'Fasting Glucose': { min: 70, max: 100, unit: 'mg/dL' },
-    'Hemoglobin': { min: 13.8, max: 17.2, unit: 'g/dL' }
-  };
-
-  const thresholds = thresholdMap[selectedMetric];
-
-  // List of available metrics in the active dataset
-  const availableMetrics = ['Vitamin D', 'Total Cholesterol', 'Fasting Glucose', 'Hemoglobin'];
+  const thresholds = selectedMetric ? THRESHOLD_MAP[selectedMetric] : null;
 
   return (
     <div className="glass-panel p-6 space-y-6">
@@ -86,26 +116,37 @@ export default function VitalsChart({ records }) {
           </div>
         </div>
 
-        {/* Metric Selector Tabs */}
-        <div className="flex flex-wrap gap-1.5 bg-slate-900/50 p-1 rounded-xl border border-white/5">
-          {availableMetrics.map((metric) => (
-            <button
-              key={metric}
-              onClick={() => setSelectedMetric(metric)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 ${
-                selectedMetric === metric
-                  ? 'bg-primary-500 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {metric}
-            </button>
-          ))}
-        </div>
+        {/* Metric Selector Tabs — one per biometric actually found in the selected reports */}
+        {availableMetrics.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 bg-slate-900/50 p-1 rounded-xl border border-white/5">
+            {availableMetrics.map((metric) => (
+              <button
+                key={metric}
+                onClick={() => setSelectedMetric(metric)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 whitespace-nowrap ${
+                  selectedMetric === metric
+                    ? 'bg-primary-500 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {metric}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Main Chart Rendering */}
-      {chartData.length > 0 ? (
+      {availableMetrics.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 border border-dashed border-white/5 rounded-xl bg-slate-800/5">
+          <Activity className="h-10 w-10 text-slate-600 mb-3" />
+          <p className="text-sm font-medium text-slate-400">No Biometrics Found</p>
+          <p className="text-xs text-slate-600 px-6 text-center mt-1">
+            None of the selected reports have extractable vitals/lab values yet. Upload a digital
+            lab report or clinical note, or select a different report above.
+          </p>
+        </div>
+      ) : chartData.length > 0 ? (
         <div className="space-y-4">
           <div className="h-[280px] w-full text-xs">
             <ResponsiveContainer width="100%" height="100%">
